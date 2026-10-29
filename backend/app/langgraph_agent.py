@@ -29,14 +29,13 @@ from backend.app.internal_tools import InternalToolService, domain_runtime_confi
 from backend.app.redis_connection import build_redis_url
 from backend.app.settings import OPENAI_KEY_PLACEHOLDER, Settings
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 log = logging.getLogger(__name__)
 
-_REDIS_KEY_PREFIX_RE = re.compile(
-    r"^(?:datagov|reddash|electrohub|healthcare|radish_bank|finance_researcher)_\w+:(.+)$"
-)
+# The model sometimes passes a full Redis key ("datagov_incident:INC-9001") where the tool wants the bare ID.
+_REDIS_KEY_PREFIX_RE = re.compile(r"^[a-z]+_[a-z]+:(.+)$")
 
 
 def _build_prompt_factory(system_prompt: str) -> Callable[[dict], list]:
@@ -79,131 +78,6 @@ def _build_prompt_factory(system_prompt: str) -> Callable[[dict], list]:
         return result
 
     return _build_prompt
-
-
-def _message_content(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list):
-        parts: list[str] = []
-        for item in value:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                text = item.get("text")
-                if text:
-                    parts.append(str(text))
-        return "\n".join(parts)
-    return str(value)
-
-
-def _serialize_verifier_context(messages: list[Any]) -> str:
-    latest_human_idx = 0
-    for i in range(len(messages) - 1, -1, -1):
-        if isinstance(messages[i], HumanMessage):
-            latest_human_idx = i
-            break
-
-    prior_messages: list[Any] = []
-    for msg in messages[:latest_human_idx]:
-        if isinstance(msg, HumanMessage):
-            prior_messages.append(msg)
-        elif isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-            prior_messages.append(msg)
-    relevant = prior_messages[-4:] + messages[latest_human_idx:]
-
-    lines: list[str] = []
-    for msg in relevant:
-        if isinstance(msg, HumanMessage):
-            lines.append(f"User: {_message_content(msg.content)}")
-        elif isinstance(msg, AIMessage):
-            if msg.tool_calls:
-                tool_names = ", ".join(call.get("name", "") for call in msg.tool_calls)
-                lines.append(f"Assistant tool plan: {tool_names}")
-            else:
-                lines.append(f"Assistant: {_message_content(msg.content)}")
-        elif isinstance(msg, ToolMessage):
-            tool_output = _message_content(msg.content)
-            if len(tool_output) > 1600:
-                tool_output = tool_output[:1600] + "..."
-            lines.append(f"Tool {msg.name}: {tool_output}")
-    return "\n\n".join(lines)
-
-
-def _build_post_model_hook(
-    model: ChatOpenAI,
-    *,
-    domain: Any,
-    lightweight_model_name: str,
-    runtime_config: dict[str, Any],
-) -> Callable[[dict], Any]:
-    verifier_kw: dict[str, Any] = {
-        "model": lightweight_model_name
-        or getattr(model, "model_name", None)
-        or getattr(model, "model", None),
-        "temperature": 0.2,
-        "api_key": getattr(model, "openai_api_key", None) or getattr(model, "api_key", None),
-    }
-    base_url = getattr(model, "openai_base_url", None) or getattr(model, "base_url", None)
-    if base_url:
-        verifier_kw["base_url"] = base_url
-    verifier_model = ChatOpenAI(**verifier_kw)
-    domain_guidance = ""
-    if hasattr(domain, "build_answer_verifier_prompt"):
-        domain_guidance = str(domain.build_answer_verifier_prompt(runtime_config=runtime_config) or "").strip()
-
-    async def _post_model_hook(state: dict) -> dict[str, list[AIMessage]]:
-        messages = state.get("messages", [])
-        if not messages:
-            return {}
-
-        last_ai: AIMessage | None = None
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage):
-                last_ai = msg
-                break
-        if last_ai is None or last_ai.tool_calls or not _message_content(last_ai.content).strip():
-            return {}
-
-        current_turn_has_tool_data = False
-        for msg in reversed(messages):
-            if isinstance(msg, HumanMessage):
-                break
-            if isinstance(msg, ToolMessage):
-                current_turn_has_tool_data = True
-                break
-        if not current_turn_has_tool_data:
-            return {}
-
-        verifier_prompt = _serialize_verifier_context(messages)
-        response = await verifier_model.ainvoke(
-            [
-                SystemMessage(
-                    content=(
-                        "You are a lightweight answer verifier for a tool-using assistant. "
-                        "Revise the draft answer only if needed to make it better grounded in the recent conversation "
-                        "and tool results. Resolve references like 'that' or 'those' using recent turns. "
-                        "Remove unsupported claims. Do not claim stock, pickup timing, or delivery status unless the tool "
-                        "results in context support it. "
-                        "If the domain guidance below is relevant, follow it as an additional grounding constraint.\n\n"
-                        f"DOMAIN-SPECIFIC VERIFIER GUIDANCE:\n{domain_guidance or 'None.'}"
-                        "\n\nKeep the same concise tone and output only the final answer markdown."
-                    )
-                ),
-                HumanMessage(
-                    content=(
-                        f"Conversation and tool context:\n\n{verifier_prompt}\n\n"
-                        f"Draft answer:\n\n{_message_content(last_ai.content)}"
-                    )
-                ),
-            ]
-        )
-        verified_content = _message_content(response.content).strip()
-        if not verified_content:
-            return {}
-        return {"messages": [AIMessage(content=verified_content, id=last_ai.id)]}
-
-    return _post_model_hook
 
 
 def _make_internal_tools(service: InternalToolService) -> list[StructuredTool]:
@@ -380,7 +254,7 @@ def _make_mcp_tool(
         kwargs = _to_plain(kwargs)
         # Strip None values — MCP server rejects null for optional numeric params
         clean_args = {k: v for k, v in kwargs.items() if v is not None}
-        # Strip Redis key prefixes the LLM sometimes adds (e.g. "reddash_order:ORD_001" → "ORD_001")
+        # Strip Redis key prefixes the LLM sometimes adds 
         for k, v in clean_args.items():
             if isinstance(v, str) and (m := _REDIS_KEY_PREFIX_RE.search(v)):
                 clean_args[k] = m.group(1)
@@ -452,7 +326,7 @@ async def create_checkpointer(settings: Settings) -> AsyncRedisSaver:
 
 
 # OpenAI bills tool definitions more compactly than their raw JSON; this factor was calibrated
-# against measured usage (Reddash: ~21k raw-JSON tokens vs ~14k billed for the 52 MCP tools).
+# against measured usage (~21k raw-JSON tokens vs ~14k billed for 52 tools).
 _SCHEMA_TOKEN_CALIBRATION = 0.65
 
 # Approximate billed tokens per tool definition, filled in by create_agent (used for reporting).
@@ -508,25 +382,9 @@ async def create_agent(
     mcp_tools = [_make_mcp_tool(t, cs_service) for t in mcp_defs]
     tools.extend(mcp_tools)
     prompt = _build_prompt_factory(domain.build_system_prompt(mcp_tools=mcp_defs, runtime_config=runtime_config))
-    post_model_hook = None
-    if runtime_config.get("enable_post_model_verifier", False):
-        post_model_hook = _build_post_model_hook(
-            model,
-            domain=domain,
-            lightweight_model_name=settings.openai_lightweight_model or settings.openai_chat_model,
-            runtime_config=runtime_config,
-        )
-
     log.info("Creating LangGraph agent with %d tools (%d internal, %d MCP), checkpointer=%s",
              len(tools), len(tools) - len(mcp_tools), len(mcp_tools),
              "redis" if checkpointer else "none")
-
-    agent_kwargs: dict[str, Any] = {
-        "prompt": prompt,
-        "checkpointer": checkpointer,
-    }
-    if post_model_hook is not None:
-        agent_kwargs["post_model_hook"] = post_model_hook
 
     estimates = _estimate_tool_tokens(tools)
     AGENT_TOOL_TOKENS.clear()
@@ -547,8 +405,4 @@ async def create_agent(
             bound_models[key] = model.bind_tools([tools_by_name[n] for n in names if n in tools_by_name])
         return bound_models[key]
 
-    return create_react_agent(
-        select_model,
-        tools,
-        **agent_kwargs,
-    )
+    return create_react_agent(select_model, tools, prompt=prompt, checkpointer=checkpointer)

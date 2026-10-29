@@ -1,4 +1,4 @@
-import type { AgentMode, DomainConfig, PromptCard } from "../types";
+import type { DomainConfig, PromptCard } from "../types";
 import { ComposerBar } from "./ComposerBar";
 
 const EYEBROW_LABELS: Record<string, string> = {
@@ -14,8 +14,6 @@ type EmptyStateProps = {
   onInputChange: (value: string) => void;
   onSubmit: () => void;
   isLoading: boolean;
-  mode: AgentMode;
-  onModeChange: (mode: AgentMode) => void;
   starterPrompts: PromptCard[];
   onPrefill: (prompt: string) => void;
 };
@@ -27,30 +25,11 @@ export function EmptyState({
   onInputChange,
   onSubmit,
   isLoading,
-  mode,
-  onModeChange,
   starterPrompts,
   onPrefill,
 }: EmptyStateProps) {
   return (
     <div className="empty-state">
-      <div className="mode-toggle">
-        <button
-          className={`mode-toggle-option ${mode === "simple_rag" ? "active" : ""}`}
-          onClick={() => onModeChange("simple_rag")}
-          type="button"
-        >
-          Simple RAG
-        </button>
-        <button
-          className={`mode-toggle-option context ${mode === "context_surfaces" ? "active" : ""}`}
-          onClick={() => onModeChange("context_surfaces")}
-          type="button"
-        >
-          Real-time Context
-        </button>
-      </div>
-
       <h1 className="empty-state-title">
         {domain?.hero_title ?? "How can we help?"}
       </h1>
@@ -97,11 +76,9 @@ export function EmptyState({
           <div className="starter-strip">
             {[...groups.entries()].map(([eyebrow, cards]) => (
               <div key={eyebrow} className="starter-group">
-                {mode === "context_surfaces" && (
-                  <span className="starter-group-label">
-                    {EYEBROW_LABELS[eyebrow] ?? eyebrow}
-                  </span>
-                )}
+                <span className="starter-group-label">
+                  {EYEBROW_LABELS[eyebrow] ?? eyebrow}
+                </span>
                 <div className="starter-chips">
                   {cards.map((p) => (
                     <button

@@ -14,16 +14,6 @@ class PromptCard(BaseModel):
     prompt: str
 
 
-class UiConfig(BaseModel):
-    show_platform_surface: bool = False
-    show_live_updates: bool = False
-    platform_surface_eyebrow: str = "Platform surface"
-    platform_surface_title: str = "Available tools and data planes"
-    platform_data_planes: list[str] = Field(default_factory=list)
-    live_updates_eyebrow: str = "Live updates"
-    live_updates_title: str = "Live update feed"
-
-
 class ThemeConfig(BaseModel):
     bg: str
     bg_accent_a: str
@@ -50,31 +40,15 @@ class BrandingConfig(BaseModel):
     demo_steps: list[str] = Field(default_factory=list)
     starter_prompts: list[PromptCard]
     theme: ThemeConfig
-    ui: UiConfig = Field(default_factory=UiConfig)
 
 
 class NamespaceConfig(BaseModel):
     redis_prefix: str
-    dataset_meta_key: str
     checkpoint_prefix: str
     checkpoint_write_prefix: str
     redis_instance_name: str
     surface_name: str
     agent_name: str
-
-
-class RagConfig(BaseModel):
-    tool_name: str
-    status_text: str
-    generating_text: str
-    index_name_contains: str
-    vector_field: str
-    return_fields: list[str]
-    num_results: int = 3
-    answer_system_prompt: str
-    title_fields: list[str] = Field(default_factory=lambda: ["title", "headline", "document_id"])
-    label_fields: list[str] = Field(default_factory=lambda: ["category", "ticker", "page_label", "company_id"])
-    body_fields: list[str] = Field(default_factory=lambda: ["content", "summary", "description", "text"])
 
 
 class IdentityConfig(BaseModel):
@@ -146,7 +120,6 @@ class DomainManifest(BaseModel):
     output_dir: str
     branding: BrandingConfig
     namespace: NamespaceConfig
-    rag: RagConfig
     identity: IdentityConfig
     guardrail: GuardrailConfig | None = None
     tool_routing: ToolRoutingConfig | None = None
@@ -188,9 +161,6 @@ class DomainPack(Protocol):
         ...
 
     def execute_internal_tool(self, tool_name: str, arguments: dict[str, Any], settings: Any) -> dict[str, Any]:
-        ...
-
-    def write_dataset_meta(self, *, settings: Any, records: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         ...
 
     def generate_demo_data(

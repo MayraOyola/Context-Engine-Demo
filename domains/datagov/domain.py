@@ -15,7 +15,6 @@ from backend.app.core.domain_contract import (
     InternalToolDefinition,
     NamespaceConfig,
     PromptCard,
-    RagConfig,
     SeedLangCacheEntry,
     SeedMemory,
     ThemeConfig,
@@ -163,22 +162,11 @@ class DataGovDomain:
         ),
         namespace=NamespaceConfig(
             redis_prefix="datagov",
-            dataset_meta_key="datagov:meta:dataset",
             checkpoint_prefix="datagov:checkpoint",
             checkpoint_write_prefix="datagov:checkpoint_write",
             redis_instance_name="Data Assistant Redis Cloud",
             surface_name="Data Assistant Surface",
             agent_name="Data Assistant Agent",
-        ),
-        rag=RagConfig(
-            tool_name="vector_search_domain_docs",
-            status_text="Searching data governance policies…",
-            generating_text="Generating answer…",
-            index_name_contains="policydoc",
-            vector_field="content_embedding",
-            return_fields=["title", "category", "content"],
-            num_results=3,
-            answer_system_prompt="Answer using only the provided policy documents.",
         ),
         identity=IdentityConfig(
             id_field="user_id",
@@ -290,7 +278,6 @@ class DataGovDomain:
             always_on=[
                 "get_current_user_profile",
                 "get_current_time",
-                "dataset_overview",
                 "search_user_memory",
                 "retire_context_memory",
                 "sweep_expired_memory",
@@ -426,10 +413,6 @@ class DataGovDomain:
             memory_enabled=bool((runtime_config or {}).get("memory_enabled")),
         )
 
-    def build_answer_verifier_prompt(self, *, runtime_config: dict[str, Any] | None = None) -> str:
-        del runtime_config
-        return ""
-
     def filter_long_term_memories(
         self, memories: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -444,9 +427,7 @@ class DataGovDomain:
                 reason = "superseded by a resolved memory" if superseded else (
                     "resolved" if view["resolved"] and not view["expired"] else "expired"
                 )
-                hidden.append(
-                    {"id": view["id"], "category": view["category"], "expires": view["expires"], "reason": reason}
-                )
+                hidden.append({"id": view["id"], "category": view["category"], "reason": reason})
             else:
                 kept.append(memory)
         return kept, hidden
@@ -488,30 +469,16 @@ class DataGovDomain:
             "id": target["id"],
             "text": target.get("text"),
             "category": view["category"],
-            "real_window_days": view["retention_days"],
             "expires_in_seconds": seconds,
         }
+
+    def memory_card(self, memory: dict[str, Any]) -> dict[str, Any]:
+        """Compact memory for the trace panel."""
+        return retention.card(memory)
 
     def reconcile_long_term_memories(self, settings: Any, memories: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Give each context_event's Redis key a TTL equal to its own retention window."""
         return native_ttl.reconcile_ttls(settings, memories)
-
-    def describe_tool_trace_step(
-        self,
-        *,
-        tool_name: str,
-        payload: Any,
-        runtime_config: dict[str, Any] | None = None,
-    ) -> str | None:
-        del payload, runtime_config
-        steps = {
-            self.manifest.identity.tool_name: "Identify the signed-in employee before checking their access and history.",
-            "get_current_time": "Compare today's date against incident dates, access end dates and retention windows.",
-            "search_user_memory": "Search durable user memory for stored work context.",
-            "retire_context_memory": "Delete a memory that is no longer relevant and log the reason.",
-            "sweep_expired_memory": "Delete every memory past its retention window and log each removal.",
-        }
-        return steps.get(tool_name)
 
     def get_internal_tool_definitions(
         self,
@@ -526,13 +493,6 @@ class DataGovDomain:
             InternalToolDefinition(
                 name="get_current_time",
                 description="Returns the current date and time in UTC (ISO 8601).",
-            ),
-            InternalToolDefinition(
-                name="dataset_overview",
-                description=(
-                    "Returns counts for the demo dataset: employees, data products, access requests, "
-                    "incidents, support interactions and policy documents."
-                ),
             ),
         ]
         if (runtime_config or {}).get("memory_enabled"):
@@ -603,8 +563,6 @@ class DataGovDomain:
             }
         if tool_name == "get_current_time":
             return {"current_time": datetime.now(timezone.utc).isoformat()}
-        if tool_name == "dataset_overview":
-            return self._redis_counts(settings)
         return {"error": f"Unknown tool: {tool_name}"}
 
     def _member_id(self) -> str:
@@ -617,23 +575,6 @@ class DataGovDomain:
 
         raw = create_redis_client(settings).execute_command("JSON.GET", f"datagov_employee:{member_id}")
         return json.loads(raw) if raw else None
-
-    @staticmethod
-    def _redis_counts(settings: Any) -> dict[str, int]:
-        """Entity counts read from the Redis keyspace, not from the in-code sample lists."""
-        client = create_redis_client(settings)
-        prefixes = {
-            "employees": "datagov_employee:",
-            "data_products": "datagov_dataproduct:",
-            "access_requests": "datagov_accessrequest:",
-            "incidents": "datagov_incident:",
-            "interactions": "datagov_interaction:",
-            "policy_docs": "datagov_policydoc:",
-        }
-        return {
-            name: sum(1 for _ in client.scan_iter(match=f"{prefix}*", count=500))
-            for name, prefix in prefixes.items()
-        }
 
     async def aexecute_internal_tool(
         self, tool_name: str, arguments: dict[str, Any], settings: Any
@@ -653,12 +594,6 @@ class DataGovDomain:
             return await memory_tools.sweep_expired_memory(service, settings, owner_id)
         finally:
             await service.close()
-
-    def write_dataset_meta(
-        self, *, settings: Any, records: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, Any]:
-        del settings, records
-        return {}
 
     def generate_demo_data(
         self,

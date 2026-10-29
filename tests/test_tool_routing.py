@@ -59,8 +59,8 @@ def test_selection_ignores_unknown_route_names():
     assert selection.tools == ["get_current_user_profile", "get_current_time"]
 
 
-def test_reddash_tool_routing_config_is_well_formed():
-    config = load_domain("reddash").manifest.tool_routing
+def test_datagov_tool_routing_config_is_well_formed():
+    config = load_domain("datagov").manifest.tool_routing
     assert config is not None
     names = [route.name for route in config.routes]
     assert len(names) == len(set(names))

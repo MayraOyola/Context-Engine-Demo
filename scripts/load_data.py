@@ -110,9 +110,6 @@ async def main() -> None:
             for err in all_errors:
                 print(f"    Error: {err}")
 
-    summary = domain.write_dataset_meta(settings=settings, records=raw_records)
-    print(f"  Wrote dataset summary → {domain.manifest.namespace.dataset_meta_key}")
-    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

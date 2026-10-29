@@ -81,7 +81,6 @@ Internal tools (instant, local):
   • get_current_user_profile — returns the signed-in employee's ID, name and email. The profile is
     already provided in the message under "Signed-in user", so you normally do NOT need this.
   • get_current_time — returns the current UTC timestamp (ISO 8601).
-  • dataset_overview — returns counts of entities in the demo dataset.
 {memory_block if memory_block else ""}
 
 Context Surface tools (Context Retriever, over MCP):

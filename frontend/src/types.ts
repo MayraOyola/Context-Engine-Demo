@@ -18,23 +18,10 @@ export type MergedToolEvent = {
   ts?: number;
 };
 
-export type ThinkingStep = {
-  id: string;
-  text: string;
-  ts: number;
-  kind: "plan" | "llm";
-  durationMs?: number;
-  durationText?: string;
-};
-
-export type StatusMessage = { text: string; ts: number };
-
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
-  statusMessages: StatusMessage[];
-  thinkingSteps: ThinkingStep[];
   toolEvents: ToolEvent[];
 };
 
@@ -51,24 +38,12 @@ export type MemoryDashboardState = {
   enabled: boolean;
   thread_id?: string | null;
   owner_id?: string;
-  short_term: Array<Record<string, unknown>>;
-  long_term: Array<Record<string, unknown>>;
+  short_term: Array<{ role: string; text: string }>;
+  long_term: Array<{ id: string; text: string; [key: string]: unknown }>;
   errors?: string[];
 } | null;
 
-export type AgentMode = "context_surfaces" | "simple_rag";
-
 export type PromptCard = { eyebrow: string; title: string; prompt: string };
-
-export type UiConfig = {
-  show_platform_surface?: boolean;
-  show_live_updates?: boolean;
-  platform_surface_eyebrow?: string;
-  platform_surface_title?: string;
-  platform_data_planes?: string[];
-  live_updates_eyebrow?: string;
-  live_updates_title?: string;
-};
 
 export type DomainConfig = {
   id: string;
@@ -80,7 +55,6 @@ export type DomainConfig = {
   starter_prompts: PromptCard[];
   theme: Record<string, string>;
   logo_src: string;
-  ui?: UiConfig;
   seed_langcache?: { prompt: string; response: string }[];
   members?: { id: string; name: string; plan: string; story: string }[];
   default_member_id?: string;

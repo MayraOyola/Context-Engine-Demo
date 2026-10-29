@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import os
 
-# main.py constructs OpenAI-backed services at import time.
+# services.py constructs OpenAI-backed services at import time.
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 import asyncio
 import json
 
-import backend.app.main as main_mod
+import backend.app.chat as chat_mod
+import backend.app.services as svc
 from backend.app.contracts import ChatRequest
 
 
@@ -26,7 +27,7 @@ def _decode_sse_payload(chunk: str) -> dict:
 
 async def _collect_chat_events(request: ChatRequest) -> list[dict]:
     out = []
-    async for chunk in main_mod.cs_event_stream(request):
+    async for chunk in chat_mod.cs_event_stream(request):
         out.append(_decode_sse_payload(chunk))
     return out
 
@@ -37,17 +38,16 @@ def _chat_request() -> ChatRequest:
 
 def _disable_preamble(monkeypatch) -> None:
     """Skip the guardrail/cache/memory phases so tests exercise the agent loop only."""
-    monkeypatch.setattr(main_mod.guardrail_service, "is_configured", lambda: False)
-    monkeypatch.setattr(main_mod.langcache_service, "is_configured", lambda: False)
-    monkeypatch.setattr(main_mod.memory_service, "is_configured", lambda: False)
-    monkeypatch.setitem(main_mod.runtime_config, "enable_post_model_verifier", False)
+    monkeypatch.setattr(svc.guardrail_service, "is_configured", lambda: False)
+    monkeypatch.setattr(svc.langcache_service, "is_configured", lambda: False)
+    monkeypatch.setattr(svc.memory_service, "is_configured", lambda: False)
 
 
 def _use_fake_agent(monkeypatch, agent) -> None:
     async def fake_get_agent(*_args, **_kwargs):
         return agent
 
-    monkeypatch.setattr(main_mod, "get_agent", fake_get_agent)
+    monkeypatch.setattr(svc, "get_agent", fake_get_agent)
 
 
 def test_cs_event_stream_emits_terminal_tool_result_on_tool_error(monkeypatch):

@@ -10,7 +10,7 @@ def test_sanitize_actor_id_collapses_invalid_characters() -> None:
 
 
 def test_sanitize_actor_id_uses_fallback_when_empty() -> None:
-    assert sanitize_actor_id("__", fallback="reddash-agent") == "reddash-agent"
+    assert sanitize_actor_id("__", fallback="demo-agent") == "demo-agent"
 
 
 def test_utc_now_iso_returns_utc_timestamp() -> None:

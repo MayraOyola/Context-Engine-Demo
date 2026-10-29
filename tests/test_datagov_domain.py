@@ -111,3 +111,29 @@ def test_reconcile_gives_each_memory_its_own_ttl(monkeypatch):
     days = {c["id"]: c["ttl_days"] for c in report}
     assert 3 < days["i"] <= 5 and 69 < days["p"] <= 71
     assert all(c["set_now"] for c in report)
+
+
+def test_card_keeps_only_the_fields_worth_showing():
+    memory = {
+        "id": "m1",
+        "text": "User's model uses Company Fundamentals.",
+        "memoryType": "context_event",
+        "namespace": "demo",
+        "ownerId": "E1001",
+        "createdAt": "2026-10-01T00:00:00Z",
+        "attributes": {
+            "context_category": "project_work",
+            "event_summary": "duplicate of text",
+            "event_date": "2026-10-01",
+            "retention_days": 90,
+            "expires_on": "2026-12-30",
+            "related_data_products": ["Company Fundamentals"],
+            "likely_follow_ups": ["lineage_check"],
+            "status": "active",
+        },
+    }
+    card = retention.card(memory)
+    assert set(card) == {
+        "id", "text", "category", "status", "expires", "days_remaining", "likely_follow_ups", "related_data_products",
+    }
+    assert card["category"] == "project_work"

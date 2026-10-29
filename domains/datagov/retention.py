@@ -92,6 +92,22 @@ def describe(memory: dict[str, Any], *, as_of: date | None = None) -> dict[str, 
     }
 
 
+def card(memory: dict[str, Any]) -> dict[str, Any]:
+    """The few fields worth showing for a memory (used in the trace panel and the memory search tool)."""
+    view = describe(memory)
+    attrs = memory.get("attributes") or {}
+    return {
+        "id": view["id"],
+        "text": view["text"],
+        "category": view["category"],
+        "status": view["status"],
+        "expires": view["expires"],
+        "days_remaining": view["days_remaining"],
+        "likely_follow_ups": view["likely_follow_ups"],
+        "related_data_products": attrs.get("related_data_products") or [],
+    }
+
+
 def superseded_ids(memories: list[dict[str, Any]]) -> set[str]:
     """Active memories replaced by a newer resolved memory in the same context category.
 

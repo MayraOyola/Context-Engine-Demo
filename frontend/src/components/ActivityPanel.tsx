@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import type {
-  AgentMode,
   ChatMessage,
   DomainConfig,
   MemoryDashboardState,
@@ -8,26 +7,14 @@ import type {
   ToolDefinition,
 } from "../types";
 import {
-  apiUrl,
   assetUrl,
   mergeToolEvents,
   toolDisplayName,
   toolKindLabel,
-  memoryEventText,
   generateToolDescription,
   extractEntity,
 } from "../utils";
 import { FlowStrip } from "./FlowStrip";
-
-type DomainEvent = {
-  stream_id: string;
-  event_family: string;
-  event_type: string;
-  headline: string;
-  ticker?: string;
-  source?: string;
-  published_at?: string;
-};
 
 type ActivityPanelProps = {
   allMessages: ChatMessage[];
@@ -41,7 +28,6 @@ type ActivityPanelProps = {
   onLoadContext: () => void;
   toolsData: ToolDefinition[];
   toolsLoading: boolean;
-  mode: AgentMode;
   domain: DomainConfig;
   isStreaming: boolean;
 };
@@ -78,7 +64,6 @@ function ToolRow({
   isStreaming?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const isDemoBlocked = resultPayload?.demo_blocked === true;
   const hasError =
     !!resultPayload &&
     typeof resultPayload === "object" &&
@@ -86,9 +71,7 @@ function ToolRow({
     "error" in resultPayload;
   // No result and the stream is done → the tool never reported back.
   const isMissing = !isComplete && !isStreaming;
-  const statusClass = isDemoBlocked
-    ? "blocked"
-    : hasError
+  const statusClass = hasError
     ? "error"
     : isComplete
     ? "done"
@@ -103,7 +86,7 @@ function ToolRow({
         type="button"
       >
         <span className={`activity-tool-status ${statusClass}`}>
-          {isDemoBlocked || hasError ? (
+          {hasError ? (
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3" />
               <path d="M7 4.5V7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
@@ -137,9 +120,6 @@ function ToolRow({
           <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {isDemoBlocked && (
-        <div className="demo-notice">Demo mode — identified as long-term but not stored</div>
-      )}
       {expanded && (
         <div className="activity-tool-detail">
           {callPayload && (
@@ -166,7 +146,7 @@ function ToolRow({
   );
 }
 
-function ActivityView({ allMessages, mode, isStreaming }: { allMessages: ChatMessage[]; mode: AgentMode; isStreaming: boolean }) {
+function ActivityView({ allMessages, isStreaming }: { allMessages: ChatMessage[]; isStreaming: boolean }) {
   const latestAssistant = [...allMessages]
     .reverse()
     .find((m) => m.role === "assistant");
@@ -175,66 +155,6 @@ function ActivityView({ allMessages, mode, isStreaming }: { allMessages: ChatMes
   }
 
   const merged = mergeToolEvents(latestAssistant.toolEvents);
-  const isRag = mode === "simple_rag";
-
-  if (isRag) {
-    const ragGuardrailTools = merged.filter((t) => t.toolKind === "guardrail");
-    const ragSearchTools = merged.filter((t) => t.toolKind !== "guardrail");
-    const ragGuardrailAllowed = ragGuardrailTools.every(
-      (t) => !t.resultPayload || (t.resultPayload as Record<string, unknown>).allowed !== false
-    );
-    return (
-      <div className="activity-content">
-        {ragGuardrailTools.length > 0 && (
-          <section className="activity-section">
-            <div className="activity-section-header">
-              <span className="activity-section-title">Semantic Routing</span>
-              <span className="activity-section-count">
-                {ragGuardrailAllowed ? "Allowed" : "Blocked"}
-              </span>
-            </div>
-            {ragGuardrailTools.map((tool, i) => (
-              <ToolRow
-                key={`guard-${i}`}
-                name={tool.toolName}
-                durationMs={tool.durationMs}
-                callPayload={tool.callPayload}
-                resultPayload={tool.resultPayload}
-                isComplete={tool.resultPayload !== undefined}
-                isStreaming={isStreaming}
-              />
-            ))}
-          </section>
-        )}
-        {ragSearchTools.length > 0 ? (
-          <section className="activity-section">
-            <div className="activity-section-header">
-              <span className="activity-section-title">Vector Search</span>
-              <span className="activity-section-count">
-                {ragSearchTools.length} call{ragSearchTools.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            {ragSearchTools.map((tool, i) => (
-              <ToolRow
-                key={`tool-${i}`}
-                name={tool.toolName}
-                kind="vector_search"
-                durationMs={tool.durationMs}
-                callPayload={tool.callPayload}
-                resultPayload={tool.resultPayload}
-                isComplete={tool.resultPayload !== undefined}
-                isStreaming={isStreaming}
-              />
-            ))}
-          </section>
-        ) : (
-          !ragGuardrailTools.length && <div className="activity-empty">Waiting for vector search...</div>
-        )}
-        <div className="panel-footer-badge">Powered by Redis Vector Search</div>
-      </div>
-    );
-  }
-
   const guardrailTools = merged.filter((t) => t.toolKind === "guardrail");
   const cacheTools = merged.filter((t) => t.toolKind === "langcache");
   const memoryTools = merged.filter((t) => t.toolKind === "memory");
@@ -422,65 +342,6 @@ function ExpandableCard({
   );
 }
 
-/* ─── Live Updates Feed (finance-researcher domain events) ─── */
-
-function LiveUpdatesFeed({ domain }: { domain: DomainConfig }) {
-  const [events, setEvents] = useState<DomainEvent[]>([]);
-  const [connected, setConnected] = useState(false);
-  const sourceRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    if (!domain?.ui?.show_live_updates) return;
-
-    const url = `${apiUrl("/api/domain-events/stream")}`;
-    const source = new EventSource(url);
-    sourceRef.current = source;
-
-    source.addEventListener("domain-event", (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as DomainEvent;
-        setEvents((prev) => [data, ...prev].slice(0, 20));
-      } catch { /* skip malformed events */ }
-    });
-
-    source.onopen = () => setConnected(true);
-    source.onerror = () => setConnected(false);
-
-    return () => {
-      source.close();
-      sourceRef.current = null;
-    };
-  }, [domain?.ui?.show_live_updates]);
-
-  if (!domain?.ui?.show_live_updates) return null;
-
-  return (
-    <section className="activity-section live-updates-section">
-      <div className="activity-section-header">
-        <span className="activity-section-title">
-          {domain.ui.live_updates_eyebrow ?? "Live Updates"}
-        </span>
-        <span className={`live-dot ${connected ? "connected" : ""}`} />
-      </div>
-      {events.length === 0 ? (
-        <div className="activity-empty">Waiting for events...</div>
-      ) : (
-        <div className="live-events-list">
-          {events.map((ev, i) => (
-            <div key={ev.stream_id ?? i} className="live-event-row">
-              <div className="live-event-headline">{ev.headline}</div>
-              <div className="live-event-meta">
-                {ev.ticker && <span className="live-event-ticker">{ev.ticker}</span>}
-                {ev.source && <span className="live-event-source">{ev.source}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 /* ─── Conversation detail panel: All Context ─── */
 
 function RedisContextContent({
@@ -489,7 +350,6 @@ function RedisContextContent({
   onRefreshMemory,
   toolsData,
   toolsLoading,
-  mode,
   domain,
   variant = "overview",
 }: {
@@ -498,7 +358,6 @@ function RedisContextContent({
   onRefreshMemory: () => void;
   toolsData: ToolDefinition[];
   toolsLoading: boolean;
-  mode: AgentMode;
   domain: DomainConfig;
   variant?: "overview" | "conversation";
 }) {
@@ -667,9 +526,9 @@ function RedisContextContent({
           <div className="panel-mem-sublabel">Working Memory</div>
           <div className="panel-mem-list">
             {memoryData!.short_term.map((event, i) => {
-              const role = String(event.role ?? "event").toLowerCase();
-              const roleLabel = role === "user" ? "Customer" : role === "assistant" ? "Agent" : role;
-              const raw = memoryEventText(event).replace(/\*\*/g, "");
+              const role = event.role.toLowerCase();
+              const roleLabel = role === "user" ? "User" : role === "assistant" ? "Agent" : role;
+              const raw = event.text.replace(/\*\*/g, "");
               const text = raw.length > 120 ? raw.slice(0, 120).replace(/\s+\S*$/, "") + "..." : raw;
               return (
                 <div key={`se-${i}`} className="panel-mem-card">
@@ -691,7 +550,7 @@ function RedisContextContent({
   return (
     <div className="redis-context-content">
       {sections}
-      <div className="panel-footer-badge">Powered by {mode === "simple_rag" ? "Redis Vector Search" : "Redis Iris"}</div>
+      <div className="panel-footer-badge">Powered by Redis Iris</div>
     </div>
   );
 }
@@ -708,13 +567,11 @@ export function ActivityPanel({
   onLoadContext,
   toolsData,
   toolsLoading,
-  mode,
   domain,
   isStreaming,
 }: ActivityPanelProps) {
   const hasMessages = allMessages.length > 0;
-  const isRag = mode === "simple_rag";
-  const showOverview = !hasMessages && !isRag;
+  const showOverview = !hasMessages;
 
   function handleSwitchToContext() {
     onLoadContext();
@@ -726,11 +583,7 @@ export function ActivityPanel({
       <div className="activity-panel-header">
         <div className="activity-panel-title">
           <img src={assetUrl("/RedisLogo.png")} alt="" className="panel-title-logo" />
-          {isRag ? (
-            <span>Redis Vector Search</span>
-          ) : (
-            <span>Redis Iris</span>
-          )}
+          <span>Redis Iris</span>
         </div>
         <button
           className="activity-panel-close"
@@ -744,7 +597,7 @@ export function ActivityPanel({
         </button>
       </div>
 
-      {hasMessages && !isRag && (
+      {hasMessages && (
         <div className="panel-tab-bar">
           <button
             className={`panel-tab ${contextView === "activity" ? "active" : ""}`}
@@ -773,18 +626,12 @@ export function ActivityPanel({
             onRefreshMemory={onRefreshMemory}
             toolsData={toolsData}
             toolsLoading={toolsLoading}
-            mode={mode}
             domain={domain}
           />
-        ) : isRag ? (
-          <ActivityView allMessages={allMessages} mode={mode} isStreaming={isStreaming} />
         ) : (
           <>
             {contextView === "activity" && (
-              <>
-                <ActivityView allMessages={allMessages} mode={mode} isStreaming={isStreaming} />
-                <LiveUpdatesFeed domain={domain} />
-              </>
+              <ActivityView allMessages={allMessages} isStreaming={isStreaming} />
             )}
             {contextView === "redis-context" && (
               <RedisContextContent
@@ -793,8 +640,7 @@ export function ActivityPanel({
                 onRefreshMemory={onRefreshMemory}
                 toolsData={toolsData}
                 toolsLoading={toolsLoading}
-                mode={mode}
-                domain={domain}
+                    domain={domain}
                 variant="conversation"
               />
             )}

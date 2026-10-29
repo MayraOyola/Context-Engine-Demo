@@ -29,9 +29,6 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None)
     openai_chat_model: str = Field(default="gpt-4o")
     openai_embedding_model: str = Field(default="text-embedding-3-small")
-    openai_reasoning_effort: str = Field(default="medium")
-    openai_lightweight_model: str = Field(default="")
-    openai_lightweight_reasoning_effort: str = Field(default="low")
 
     redis_host: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
@@ -80,13 +77,6 @@ class Settings(BaseSettings):
     # Send the LLM only the tools a question needs (see ToolRoutingConfig in the domain manifest).
     tool_routing_enabled: bool = Field(default=True)
     demo_domain: str = Field(default="datagov")
-    show_final_verifier_trace_step: bool = Field(default=False)
-    show_llm_trace_steps: bool = Field(default=False)
-
-    radish_hf_embedding_model: str = Field(
-        default="sentence-transformers/all-mpnet-base-v2",
-    )
-    hf_token: str = Field(default="", validation_alias="HF_TOKEN")
 
     @field_validator("memory_similarity_threshold", mode="before")
     @classmethod

@@ -3,10 +3,9 @@ import type {
   MergedToolEvent,
 } from "./types";
 
-export const modeStorageKey = "demo-domain-mode";
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-// Public assets must respect the Vite base path (the workshop serves this app under /app/).
+// Public assets must respect the Vite base path.
 export function assetUrl(path: string) {
   return `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path}`;
 }
@@ -34,19 +33,6 @@ export function toolDisplayName(toolName: string) {
   if (/^search_\w+_memory$/.test(toolName)) return "Long-term memory · SEARCH";
   if (/^remember_/.test(toolName)) return "Long-term memory · CREATE";
   return toolName;
-}
-
-export function memoryEventText(event: Record<string, unknown>) {
-  const content = event.content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item) =>
-      item && typeof item === "object" && "text" in item
-        ? String((item as { text?: unknown }).text ?? "")
-        : ""
-    )
-    .filter(Boolean)
-    .join(" ");
 }
 
 export function mergeToolEvents(events: ToolEvent[]): MergedToolEvent[] {

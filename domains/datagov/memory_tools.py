@@ -42,13 +42,6 @@ async def _audit(settings: Any, event: dict[str, str]) -> None:
         event["audit_error"] = str(exc)
 
 
-def _search_view(memory: dict[str, Any]) -> dict[str, Any]:
-    view = retention.describe(memory)
-    view["memory_type"] = memory.get("memoryType")
-    view["created_at"] = memory.get("createdAt")
-    return view
-
-
 async def search_user_memory(service: MemoryService, owner_id: str, args: dict[str, Any]) -> dict[str, Any]:
     query = str(args.get("query", "")).strip()
     if not query:
@@ -58,15 +51,8 @@ async def search_user_memory(service: MemoryService, owner_id: str, args: dict[s
         text=query, owner_id=owner_id, limit=int(limit) if limit is not None else None
     )
     stale = retention.superseded_ids(memories)
-    views = [_search_view(m) for m in memories]
-    live = [v for v in views if not (v["expired"] or v["resolved"] or str(v["id"]) in stale)]
-    return {
-        "owner_id": owner_id,
-        "query": query,
-        "memory_count": len(live),
-        "memories": live,
-        "hidden": [v["id"] for v in views if v not in live],
-    }
+    live = [m for m in memories if not retention.is_inactive(m) and str(m.get("id")) not in stale]
+    return {"memories": [retention.card(m) for m in live]}
 
 
 async def retire_context_memory(
@@ -83,7 +69,7 @@ async def retire_context_memory(
     await _audit(settings, {
         "action": "retire", "memory_id": memory_id, "owner_id": owner_id, "reason": reason,
     })
-    return {"retired": True, "memory": retention.describe(owned[memory_id]), "reason": reason}
+    return {"retired": True, "memory": retention.card(owned[memory_id]), "reason": reason}
 
 
 async def sweep_expired_memory(service: MemoryService, settings: Any, owner_id: str) -> dict[str, Any]:
@@ -91,7 +77,7 @@ async def sweep_expired_memory(service: MemoryService, settings: Any, owner_id: 
     managed = await _all_managed(service, owner_id)
     stale = retention.superseded_ids(managed)
     deleted: list[dict[str, Any]] = []
-    kept: list[dict[str, Any]] = []
+    kept: list[str] = []
     for memory in managed:
         view = retention.describe(memory)
         superseded = str(view["id"]) in stale
@@ -104,13 +90,7 @@ async def sweep_expired_memory(service: MemoryService, settings: Any, owner_id: 
                 "action": action, "memory_id": str(view["id"]), "owner_id": owner_id,
                 "category": str(view["category"]), "expires": str(view["expires"]),
             })
-            deleted.append(view)
+            deleted.append({"id": view["id"], "text": view["text"], "category": view["category"], "reason": action})
         else:
-            kept.append(view)
-    return {
-        "as_of": retention.today().isoformat(),
-        "checked": len(managed),
-        "deleted_count": len(deleted),
-        "deleted": deleted,
-        "kept": kept,
-    }
+            kept.append(str(view["id"]))
+    return {"deleted": deleted, "kept": kept}

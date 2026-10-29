@@ -196,10 +196,6 @@ button { cursor: pointer; border: none; background: none; }
   letter-spacing: -0.03em;
 }
 
-.brand-accent {
-  color: #B22D23;
-}
-
 .brand-subtitle {
   font-size: 0.9rem;
   font-weight: 500;
@@ -309,15 +305,6 @@ button { cursor: pointer; border: none; background: none; }
   width: 100%;
   position: relative;
   z-index: 1;
-}
-
-.empty-state .mode-toggle {
-  margin-bottom: 24px;
-}
-
-.shell--landing .mode-toggle {
-  background: rgba(120, 120, 120, 0.1);
-  border: 1px solid rgba(120, 120, 120, 0.2);
 }
 
 .shell--landing .topbar-context-btn {
@@ -474,7 +461,6 @@ button { cursor: pointer; border: none; background: none; }
   color: var(--color-text-tertiary);
 }
 
-
 .send-btn {
   position: absolute;
   right: 10px;
@@ -497,49 +483,7 @@ button { cursor: pointer; border: none; background: none; }
   cursor: default;
 }
 
-
-/* ── Mode Toggle ────────────────────────────────────── */
-.mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-tertiary);
-  gap: 2px;
-}
-
-.mode-toggle-option {
-  padding: 8px 18px;
-  border-radius: var(--radius-pill);
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--color-text-tertiary);
-  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
-}
-
-.mode-toggle-option.active {
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.mode-toggle-option.context.active {
-  background: #C1FF00;
-  color: #1a1a1a;
-}
-
-.mode-toggle-option:not(.active):hover {
-  color: var(--color-text-secondary);
-}
-
-.mode-toggle.small {
-  padding: 2px;
-}
-
-.mode-toggle.small .mode-toggle-option {
-  padding: 5px 14px;
-  font-size: 0.82rem;
-}
+/
 
 /* ── Conversation Layout ─────────────────────────────── */
 .conversation-layout {
@@ -1094,13 +1038,6 @@ button { cursor: pointer; border: none; background: none; }
   color: var(--color-text-tertiary);
 }
 
-.demo-notice {
-  padding: 4px 0 4px 26px;
-  font-size: 0.78rem;
-  color: #c07c10;
-  font-weight: 500;
-}
-
 .activity-tool-spinner {
   width: 12px;
   height: 12px;
@@ -1305,55 +1242,7 @@ button { cursor: pointer; border: none; background: none; }
   letter-spacing: 0.02em;
 }
 
-/* ── Live Updates Feed ──────────── */
-.live-updates-section {
-  margin-top: 12px;
-  border-top: 1px solid var(--color-border-light);
-  padding-top: 12px;
-}
-
-.live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-tertiary);
-  display: inline-block;
-}
-
-.live-dot.connected {
-  background: #22c55e;
-}
-
-.live-events-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.live-event-row {
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-secondary);
-}
-
-.live-event-headline {
-  font-size: 0.82rem;
-  color: var(--color-text-primary);
-  line-height: 1.4;
-}
-
-.live-event-meta {
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
-}
-
-.live-event-ticker {
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
+/
 
 /* ── Context cards (conversation All Context) ──────────── */
 .context-card {
@@ -1491,17 +1380,7 @@ button { cursor: pointer; border: none; background: none; }
   animation: pulse 1.8s ease-in-out infinite;
 }
 
-/* ── Overview shared stat/preview styles ──────────────── */
-
-.overview-card-badge {
-  margin-left: auto;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--color-text-tertiary);
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--color-border-light);
-}
+/
 
 .overview-stat-row {
   display: flex;
@@ -1541,22 +1420,6 @@ button { cursor: pointer; border: none; background: none; }
   padding: 8px 12px;
   background: var(--color-bg-secondary);
   border-radius: var(--radius-sm);
-}
-
-.cache-origin {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 5px;
-  font-size: 0.75rem;
-  color: #9a8e7f;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.cache-origin svg {
-  flex-shrink: 0;
-  opacity: 0.7;
 }
 
 .overview-sources {

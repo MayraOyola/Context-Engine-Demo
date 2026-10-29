@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
-  AgentMode,
   ChatMessage,
   DomainConfig,
   HealthState,
@@ -8,7 +7,7 @@ import type {
   RedisContextView,
   ToolDefinition,
 } from "./types";
-import { apiUrl, assetUrl, modeStorageKey } from "./utils";
+import { apiUrl, assetUrl } from "./utils";
 
 import { EmptyState } from "./components/EmptyState";
 import { ConversationView } from "./components/ConversationView";
@@ -19,8 +18,6 @@ function emptyMsg(): ChatMessage {
     id: "",
     role: "assistant",
     content: "",
-    statusMessages: [],
-    thinkingSteps: [],
     toolEvents: [],
   };
 }
@@ -28,9 +25,6 @@ function emptyMsg(): ChatMessage {
 export default function App() {
   const [health, setHealth] = useState<HealthState>(null);
   const [domain, setDomain] = useState<DomainConfig>(null);
-  const [mode, setMode] = useState<AgentMode>(
-    () => (localStorage.getItem(modeStorageKey) as AgentMode) || "context_surfaces"
-  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -89,10 +83,6 @@ export default function App() {
     fetchDomainConfig();
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(modeStorageKey, mode);
-  }, [mode]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -180,14 +170,6 @@ export default function App() {
     setActivityPanelOpen(true);
   }
 
-  function handleModeChange(newMode: AgentMode) {
-    setMode(newMode);
-    setMessages([]);
-    setThreadId(crypto.randomUUID());
-    setActivityPanelOpen(false);
-    autoOpenedRef.current = false;
-  }
-
   async function submitPrompt(prompt: string, event?: FormEvent) {
     event?.preventDefault();
     const trimmed = prompt.trim();
@@ -212,7 +194,6 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages.map(({ role, content }) => ({ role, content })),
-          mode,
           thread_id: threadId,
           member_id: memberRef.current || undefined,
         }),
@@ -240,42 +221,6 @@ export default function App() {
             cur.map((m) => {
               if (m.id !== assistantId) return m;
               switch (ev.type) {
-                case "status":
-                  return {
-                    ...m,
-                    statusMessages: [
-                      ...m.statusMessages,
-                      { text: ev.text, ts: ev.ts ?? 0 },
-                    ],
-                  };
-                case "thinking-step":
-                  return {
-                    ...m,
-                    thinkingSteps: [
-                      ...m.thinkingSteps,
-                      {
-                        id:
-                          ev.stepId ??
-                          `step-${m.thinkingSteps.length}-${ev.ts ?? 0}`,
-                        text: ev.step,
-                        ts: ev.ts ?? 0,
-                        kind: ev.stepKind === "llm" ? "llm" : "plan",
-                      },
-                    ],
-                  };
-                case "thinking-step-finish":
-                  return {
-                    ...m,
-                    thinkingSteps: m.thinkingSteps.map((step) =>
-                      step.id === ev.stepId
-                        ? {
-                            ...step,
-                            durationMs: ev.durationMs,
-                            durationText: ev.durationText,
-                          }
-                        : step
-                    ),
-                  };
                 case "tool-call":
                 case "tool-result":
                   return {
@@ -518,7 +463,7 @@ export default function App() {
             type="button"
           >
             <img src={assetUrl("/RedisLogo.png")} alt="" className="topbar-context-logo" />
-            <span>{mode === "simple_rag" ? "Redis Vector Search" : "Redis Iris"}</span>
+            <span>Redis Iris</span>
           </button>
         </div>
       </header>
@@ -532,8 +477,6 @@ export default function App() {
             onInputChange={setInput}
             onSubmit={handleSubmit}
             isLoading={isLoading}
-            mode={mode}
-            onModeChange={handleModeChange}
             starterPrompts={allQuickStarts}
             onPrefill={handlePrefill}
           />
@@ -565,7 +508,6 @@ export default function App() {
         onLoadContext={loadContext}
         toolsData={toolsData}
         toolsLoading={toolsLoading}
-        mode={mode}
         domain={domain}
         isStreaming={isLoading}
       />
